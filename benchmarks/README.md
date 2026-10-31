@@ -1,18 +1,18 @@
-# Результаты и метод сравнения
+# Results and comparison method
 
-[results.json](results.json) содержит сводку измерений исследовательского прототипа и отдельных синтетических компонентов. Это не универсальный benchmark Kimi и не обещание скорости на другой машине.
+[results.json](results.json) summarizes measurements from the research prototype and individual synthetic components. It is not a general Kimi benchmark or a performance promise for another machine.
 
-Условия измерений модели: Apple M4 Pro, 24 GiB общей памяти, один запрос `Write Python function add(a,b).`, 21 входной токен после chat template, FP32-вычисления с исходными Q4/BF16-весами. Использован короткий контекст 64. Официальный BF16-runtime не выступал эталоном.
+Model measurements used an Apple M4 Pro with 24 GiB of unified memory, one prompt, `Write Python function add(a,b).`, 21 input tokens after applying the chat template, and FP32 computation with the original Q4/BF16 weights. Context length was limited to 64. An official BF16 runtime was not used as a reference.
 
-| Метрика | Значение | Ограничение |
+| Metric | Value | Limitation |
 |---|---|---|
-| Медиана пяти совпадающих decode-интервалов CPU/GPU | 65,0744 / 30,4986 с, отношение 2,1337× | Разные последовательные запуски; I/O checkpoint включён |
-| Приблизительный TTFT CPU/GPU | 516 / 128,7 с | Историческая оценка, без изоляции фоновой нагрузки |
-| Медиана всех 39 GPU-интервалов | 22,6538 с | CPU-эталона для оставшихся 34 token ID нет |
-| Один полный replay с CPU/GPU dense | 28,7275 / 21,3241 с, отношение 1,3472× | Время вычисления одного сохранённого шага, не нового ответа |
+| Median of five matching CPU/GPU decode intervals | 65.0744 / 30.4986 s, ratio 2.1337× | Separate sequential runs; checkpoint I/O included |
+| Approximate CPU/GPU TTFT | 516 / 128.7 s | Historical estimate without background-load isolation |
+| Median of all 39 GPU intervals | 22.6538 s | No CPU reference for the remaining 34 token IDs |
+| One complete replay with CPU/GPU dense projections | 28.7275 / 21.3241 s, ratio 1.3472× | Compute time for one saved step, not a new answer |
 
-Первые шесть CPU/GPU token ID совпали. GPU дошёл до 40 выходных токенов и остановился по длине внутри рассуждения. Законченный код не получен, функциональная корректность решения не оценивалась.
+The first six CPU/GPU token IDs matched. The GPU reached 40 output tokens and stopped at the length limit during reasoning. It did not produce completed code, and functional correctness of a solution was not evaluated.
 
-В JSON отдельно выделены синтетические проверки fused BF16 и extent planner. Снижение пика выделений или числа запросов не превращается автоматически в коэффициент ускорения. Счётчики запрошенных байтов также не измеряют физический трафик SSD.
+The JSON reports synthetic fused BF16 and extent-planner checks separately. Lower peak allocations or fewer requests do not automatically translate into a speedup factor. Requested-byte counters do not measure physical SSD traffic either.
 
-Для следующего сравнения нужны одинаковые входы, вычислительный backend, прогрев и политика checkpoint, несколько порядков запуска, численная проверка и запись фоновой нагрузки. TTFT, межтокенное wall-time и чистое время replay хранятся раздельно. Коэффициенты разных опытов не перемножаются.
+The next comparison needs identical inputs, computation backend, warmup, and checkpoint policy, along with multiple run orders, numerical checks, and recorded background load. TTFT, inter-token wall time, and pure replay compute time are kept separate. Speedup factors from different experiments are not multiplied.

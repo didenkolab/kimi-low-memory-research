@@ -1,31 +1,31 @@
-# Проверенные компоненты и следующие опыты
+# Validated components and next experiments
 
-Цель исследования: сокращать лишнее чтение, преобразование и хранение данных, сохраняя проверяемое вычисление модели. Мы различаем равенство математических выражений, близость FP32-результатов и совпадение token ID. Одно не заменяет другое.
+The research aims to reduce unnecessary reads, conversions, and storage while keeping model computation verifiable. We distinguish mathematical equivalence, numerical agreement in FP32, and matching token IDs. None of these establishes the others.
 
-## BF16 без полной FP32-копии
+## BF16 without a full FP32 copy
 
-Обычный путь разворачивает BF16-блок весов в FP32 перед умножением. Экспериментальный GEMV читает BF16-биты непосредственно внутри Metal kernel и накапливает FP32. На 65 280 конечных BF16-паттернах декодирование совпало побитно; девять малых форм матриц прошли численное сравнение. Порядок SIMD reduction отличается от MLX matmul, поэтому побитное равенство результата умножения не заявляется.
+The conventional path expands a BF16 weight block to FP32 before multiplication. The experimental GEMV reads BF16 bits directly inside a Metal kernel and accumulates in FP32. Decoding was bit-exact for 65,280 finite BF16 bit patterns; nine small matrix shapes passed numerical comparisons. SIMD reduction order differs from MLX matmul, so bit-exact multiplication results are not claimed.
 
-Для синтетической матрицы 19×7168 дополнительный пик MLX active allocations составил 557 132 байта у пути с FP32-копией и 76 байт у fused-пути. Это измерение allocator при уже размещённых входах. Оно не показывает физический трафик памяти и не устанавливает ускорение Kimi. Скорость этого опыта не используется для выбора реализации из-за внешней нагрузки.
+For a synthetic 19×7168 matrix, the additional peak in MLX active allocations was 557,132 bytes for the FP32-copy path and 76 bytes for the fused path. This is an allocator measurement with inputs already allocated. It does not measure physical memory traffic or establish a Kimi speedup. Timing from this experiment is not used to select an implementation because of background load.
 
-Следующая проверка: одна реальная проекция, затем полный слой с контролем выходов, маршрутов и памяти. Fused unpacking сам по себе не новый метод: Q4 `qmv` MLX уже распаковывает данные внутри kernel. [MLX kernels](https://github.com/ml-explore/mlx/blob/v0.32.4/mlx/backend/metal/kernels/quantized.h), [custom Metal API](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.fast.metal_kernel.html).
+The next check is one real projection, followed by a full layer with output, routing, and memory checks. Fused unpacking itself is not a new method: MLX Q4 `qmv` already unpacks data inside the kernel. See [MLX kernels](https://github.com/ml-explore/mlx/blob/v0.32.4/mlx/backend/metal/kernels/quantized.h) and the [custom Metal API](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.fast.metal_kernel.html).
 
-## Объединение диапазонов чтения
+## Combining read ranges
 
-Data sieving читает несколько близких областей одним диапазоном и извлекает нужные срезы. Цена уменьшения числа запросов состоит в чтении промежутков. Подход известен из HPC; планирование физического порядка чтения применяется и в СУБД. [ROMIO](https://ftp.mcs.anl.gov/pub/romio/users-guide/node5.html), [PostgreSQL bitmap scans](https://www.postgresql.org/docs/17/indexes-bitmap-scans.html).
+Data sieving reads several nearby regions as one range, then extracts the required slices. Fewer requests come at the cost of reading the gaps. This approach is established in HPC; database systems also schedule reads in physical order. See [ROMIO](https://ftp.mcs.anl.gov/pub/romio/users-guide/node5.html) and [PostgreSQL bitmap scans](https://www.postgresql.org/docs/17/indexes-bitmap-scans.html).
 
-Наш ограниченный planner проверен на искусственных диапазонах: 24 запроса → 4, 196 608 полезных байт → 199 168 запрошенных байт, максимальный диапазон 58 112 байт. Все срезы восстановлены побайтно в исходном порядке. Это ещё не результат по файловой раскладке Kimi или SSD.
+Our bounded planner was tested on artificial ranges: 24 requests → 4, 196,608 useful bytes → 199,168 requested bytes, with a maximum range of 58,112 bytes. All slices were recovered byte for byte in their original order. This is not yet a result for Kimi's file layout or SSD performance.
 
-Следующая проверка: построить план по metadata восьми уже выбранных экспертов, отклонить невыгодные объединения и сравнить ожидание I/O с текущим prefetch. Увеличение очереди без измерения задержек чтения и занятости вычислителя не считается улучшением.
+The next check is to build a plan from the metadata of eight already-selected experts, reject merges that read too many extra bytes, and compare I/O wait with the current prefetch implementation. Increasing queue depth without measuring read latency and compute utilization does not establish an improvement.
 
-## KV: сначала хранение, затем изменение attention
+## KV: storage first, attention changes next
 
-Expanded FP32 KV для 61 слоя требует 4 013 312 байт на позицию, около 245 MiB при контексте 64. Его перенос в RAM подготовлен отдельным store и проверен синтетически, но новое ускорение многотокенного inference этим ещё не установлено.
+Expanded FP32 KV for 61 layers requires 4,013,312 bytes per position, approximately 245 MiB at a context length of 64. A separate store for keeping it in RAM has been prepared and tested synthetically, but this has not yet established a new multi-token inference speedup.
 
-Latent MLA сокращает KV примерно в 28,56 раза для рассматриваемых размеров, но меняет число операций и FP32-округление. Одно реальное attention-вычисление прошло численное сравнение; полного ответа через MLA-backend пока нет. Выбор expanded/latent представления должен учитывать контекст и измеренную стоимость, а не только размер кэша. [Hardware-Centric Analysis of DeepSeek’s Multi-Head Latent Attention](https://arxiv.org/html/2506.02523v1), [реализация DeepSeek](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py).
+Latent MLA reduces KV storage by approximately 28.56× for the dimensions under study, but changes the operation count and FP32 rounding. One real attention computation passed a numerical comparison; a complete answer through an MLA backend has not been produced. The choice between expanded and latent representations must account for context length and measured cost, not just cache size. See [Hardware-Centric Analysis of DeepSeek’s Multi-Head Latent Attention](https://arxiv.org/html/2506.02523v1) and the [DeepSeek implementation](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py).
 
-## Кэш не равен ускорению
+## Caching does not establish a speedup
 
-Host-кэш shared-весов удержал 5,28 GB и уменьшил объём запросов чтения на 16,02%, но опыт с внешней нагрузкой не подтвердил ускорение полного шага. BF16 device-cache прошёл синтетические проверки владения буферами, повторного использования и освобождения; реальное ускорение Kimi ещё предстоит измерить.
+A host cache of shared weights retained 5.28 GB and reduced requested read bytes by 16.02%, but the experiment under background load did not demonstrate a faster complete step. The BF16 device cache passed synthetic checks of buffer ownership, reuse, and release; its effect on real Kimi performance remains to be measured.
 
-Новые многотокенные варианты, большой контекст и готовое решение coding-задач остаются отдельными задачами проверки. [Сводные результаты и ограничения](../benchmarks/README.md).
+New multi-token configurations, longer context, and completed coding answers remain separate validation tasks. See the [results and limitations](../benchmarks/README.md).

@@ -1,37 +1,37 @@
-# Архитектура
+# Architecture
 
-`kimi_low_memory` разделяет чтение весов, вычисления и управление памятью. Компоненты можно проверять независимо на небольших входах. Их наличие не означает, что все оптимизации уже соединены в один проверенный runtime.
+`kimi_low_memory` separates weight reads, computation, and memory management. Components can be tested independently on small inputs. Their presence does not mean that all optimizations have been combined into a validated runtime.
 
-| Модуль | Назначение |
+| Module | Purpose |
 |---|---|
-| `reference/reader.py` | Чтение tensor metadata и ограниченных диапазонов safetensors |
-| `reference/safe_tokenizer.py` | Загрузка tokenizer через tiktoken без выполнения Python-кода из репозитория модели |
-| `reference/model.py` | FP32 reference-операции, attention, маршрутизация экспертов и KV |
-| `caches.py` | Кэш с явным бюджетом и идентичностью источника |
-| `kv.py` | Последняя KV-generation по слоям, проверка состояния и учёт backing allocations |
-| `prefetch.py` | Ограниченное опережающее чтение уже выбранных экспертов |
-| `extents.py` | Объединение близких диапазонов с ограничением объёма лишнего чтения |
-| `memory.py` | Снимки памяти; allocator payload не подменяется системным RSS |
-| `mlx/bf16.py` | Блочные BF16-проекции и экспериментальный fused GEMV |
-| `mlx/q4.py` | Q4-проекции и deferred-вычисление выбранного эксперта |
-| `mlx/device_cache.py` | Повторное использование BF16 MLX arrays без постоянной второй host-копии |
+| `reference/reader.py` | Read tensor metadata and bounded safetensors ranges |
+| `reference/safe_tokenizer.py` | Load the tokenizer through tiktoken without executing Python code from the model repository |
+| `reference/model.py` | FP32 reference operations, attention, expert routing, and KV |
+| `caches.py` | Cache with an explicit budget and source identity |
+| `kv.py` | Latest KV generation per layer, state validation, and backing-allocation accounting |
+| `prefetch.py` | Bounded prefetch of experts that have already been selected |
+| `extents.py` | Combine nearby ranges while limiting extra bytes read |
+| `memory.py` | Memory snapshots that distinguish allocator payload from system RSS |
+| `mlx/bf16.py` | Blocked BF16 projections and experimental fused GEMV |
+| `mlx/q4.py` | Q4 projections and deferred computation for a selected expert |
+| `mlx/device_cache.py` | Reuse BF16 MLX arrays without retaining a second host copy |
 
-## Вычисления и порядок данных
+## Computation and data order
 
-Reference-путь сначала вычисляет attention и router, затем читает веса выбранных экспертов. Prefetch получает уже известные expert ID. Он не угадывает следующий слой и не меняет набор экспертов.
+The reference path computes attention and routing before reading the selected experts' weights. Prefetch receives expert IDs that are already known. It does not predict the next layer or change the selected set.
 
-Порядок дисковых чтений можно менять независимо от порядка накопления результатов. Планировщик объединяет близкие интервалы, ограничивая размер одного чтения и read amplification. Полученные срезы возвращаются потребителю в исходном логическом порядке. Это сохраняет порядок FP32-суммирования при неизменных вычислительных kernels.
+The order of disk reads can change independently of the order in which results are accumulated. The planner combines nearby intervals while limiting individual read size and read amplification. The resulting slices are returned to the consumer in their original logical order. This preserves FP32 accumulation order when the computation kernels remain unchanged.
 
-MLX adapters принимают Reader с описаниями тензоров и методом чтения диапазона. Настройка глобальных memory/cache limits выполняется явно. Библиотечный компонент не должен незаметно сбрасывать лимит при каждом новом Reader.
+MLX adapters accept a Reader with tensor metadata and a range-read method. Global memory/cache limits are configured explicitly. A library component must not silently reset those limits whenever a new Reader is created.
 
-## Владение KV
+## KV ownership
 
-KV-store обновляет слои строго последовательно. Во время обновления одного слоя одновременно существуют его старый и новый KV; после замены собственная ссылка на старый буфер освобождается. Сохранение второй полной generation не требуется.
+The KV store updates layers in strict sequence. During a layer update, its old and new KV coexist; after replacement, the store releases its reference to the old buffer. It does not need to retain a second complete generation.
 
-Проверяются dtype, формы, конечность значений, текущая позиция и неизменность старого префикса. Ошибка после частичного обновления делает store непригодным для продолжения. Транзакционный rollback и восстановление с диска этот компонент не обещает. Сохранение завершённого шага и правила resume принадлежат вызывающему runner.
+The store validates dtype, shapes, finite values, the current position, and preservation of the old prefix. An error after a partial update makes the store unusable for further generation. This component does not provide transactional rollback or recovery from disk. Saving a completed step and enforcing resume rules are the caller's responsibility.
 
-## Что ограничивают budgets
+## What the budgets cover
 
-Retained payload, transient old+new, MLX active/cache и системные resident/compressed/phys_footprint описывают разные части использования памяти. Их нельзя складывать без учёта перекрытия. Переданный callback может выделять дополнительные временные массивы, поэтому бюджет store не заменяет ограничитель процесса.
+Retained payload, transient old+new storage, MLX active/cache allocations, and system resident/compressed/phys_footprint counters describe different aspects of memory use. They cannot be added without accounting for overlap. A caller-supplied callback may allocate additional temporary arrays, so the store's budget does not replace a process guard.
 
-Apple Silicon использует общую память CPU/GPU. BF16 device-cache не создаёт дополнительную VRAM и не гарантирует физическую резидентность весов. Самостоятельная библиотека также не защищает от нагрузки других приложений; длительный inference требует отдельного supervisor.
+Apple Silicon uses unified CPU/GPU memory. A BF16 device cache does not create additional VRAM or guarantee that weights remain physically resident. The library also cannot protect against other applications' memory use; long-running inference requires a separate supervisor.

@@ -1,16 +1,16 @@
-# Разработка
+# Contributing
 
-Установите проект из корня репозитория и выполните CPU-проверки:
+Install the project from the repository root and run the CPU checks:
 
 ```sh
 python -m pip install -e '.[reference]'
 python -m unittest discover -s tests -v
 ```
 
-Обычный запуск тестов не открывает веса и не загружает GPU. MLX-проверки включаются отдельно и требуют контроля памяти процесса.
+The default test run does not open model weights or use the GPU. MLX checks are enabled separately and require process memory monitoring.
 
-Для изменения вычислений сначала добавьте малую численную проверку, затем сравните один реальный компонент и только после этого полный проход. Сохраняйте порядок накопления FP32, если изменение порядка не является предметом опыта.
+For changes to computation, first add a small numerical test, then compare one real component, and only then run a complete pass. Preserve FP32 accumulation order unless changing it is the subject of the experiment.
 
-В отчёте укажите модель и ревизию, форму входа, dtype, hardware, состояние кэша, фоновые процессы, число повторов и область измерения. TTFT, время вычислений и межтокенный интервал с I/O являются разными метриками. Снижение объёма массивов или числа read-запросов само по себе не доказывает ускорение модели.
+Reports should identify the model and revision, input shape, dtype, hardware, cache state, background processes, repetition count, and measurement scope. TTFT, compute time, and inter-token intervals including I/O are different metrics. Smaller arrays or fewer read requests alone do not prove faster model execution.
 
-Веса, checkpoints, журналы локальных запусков и личные настройки в pull request не включаются. Для нового результата достаточно компактной таблицы и воспроизводимой методики. Тексты сторонних лицензий и атрибуция сохраняются.
+Do not include weights, checkpoints, local run logs, or personal settings in pull requests. A compact table and a reproducible method are sufficient for a new result. Preserve third-party license texts and attribution.
