@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "scope": "Research prototype measurements and isolated component checks; not a benchmark of the complete packaged runtime",
+  "environment": {
+    "processor": "Apple M4 Pro",
+    "unified_memory_bytes": 25769803776,
+    "model": "Kimi-K2-Thinking",
+    "weight_formats": ["packed Q4", "BF16"],
+    "compute_dtype": "FP32",
+    "mlx_version": "0.32.4",
+    "numpy_version": "2.3.5",
+    "prompt": "Write Python function add(a,b).",
+    "prompt_tokens_with_template": 21,
+    "context_limit": 64,
+    "official_bf16_reference_used": false
+  },
+  "model_measurements": [
+    {
+      "id": "matched_decode_positions",
+      "metric": "median inter-token wall seconds including checkpoint I/O",
+      "matched_intervals": 5,
+      "cpu_seconds": 65.074436564,
+      "gpu_seconds": 30.498560002,
+      "cpu_over_gpu_ratio": 2.133688822020863,
+      "first_six_token_ids_equal": true,
+      "controlled_external_load": false,
+      "method": "Intervals reconstructed from token checkpoint timestamps"
+    },
+    {
+      "id": "historical_ttft",
+      "metric": "approximate seconds to first output token",
+      "cpu_seconds": 516.0,
+      "gpu_seconds": 128.7,
+      "approximate_ratio": 4.0,
+      "approximate": true,
+      "controlled_external_load": false
+    },
+    {
+      "id": "gpu_sequence",
+      "generated_tokens": 40,
+      "decode_intervals": 39,
+      "median_intertoken_seconds": 22.653826224,
+      "finish_reason": "length",
+      "ended_inside_reasoning": true,
+      "finished_coding_solution": false,
+      "cpu_reference_token_count": 6
+    },
+    {
+      "id": "full_layer_stack_replay",
+      "scope": "One saved decode step through all61 layers and output head",
+      "metric": "mean compute-call seconds; excludes checkpoint loading and comparison",
+      "cpu_dense_seconds": 28.72754720750163,
+      "gpu_bf16_dense_seconds": 21.324075854498915,
+      "ratio": 1.3471883800976419,
+      "routed_backend": "deferred Q4 GPU projections",
+      "new_multitoken_generation": false
+    }
+  ],
+  "component_results": [
+    {
+      "id": "bounded_extent_planner",
+      "status": "synthetic_byte_identity_passed",
+      "actual_kimi_offsets_used": false,
+      "original_requests": 24,
+      "planned_requests": 4,
+      "useful_bytes": 196608,
+      "planned_bytes": 199168,
+      "read_amplification": 1.0130208333333333,
+      "max_planned_read_bytes": 58112,
+      "original_payload_order_restored": true,
+      "speedup": null
+    },
+    {
+      "id": "fused_bf16_gemv",
+      "status": "tiny_synthetic_correctness_passed",
+      "real_model_weights_used": false,
+      "finite_bf16_patterns_decoded_bit_exact": 65280,
+      "matrix_shapes_tested": 9,
+      "repeated_comparison_passes": 108,
+      "matmul_bit_exactness_claimed": false,
+      "allclose_and_conservative_reduction_bound_passed": true,
+      "memory_example": {
+        "shape": [19, 7168],
+        "metric": "incremental peak MLX active bytes with inputs already allocated",
+        "bf16_to_fp32_matmul": 557132,
+        "fused_gemv": 76
+      },
+      "speed_selection_allowed": false,
+      "reason": "External compiler activity; tiny matrices do not establish full-model speed"
+    },
+    {
+      "id": "shared_host_cache",
+      "retained_payload_bytes": 5284823040,
+      "baseline_requested_read_bytes": 32986516736,
+      "warm_requested_read_bytes": 27701693696,
+      "physical_ssd_bytes_measured": false,
+      "full_model_speedup_established": false
+    },
+    {
+      "id": "resident_expanded_kv",
+      "status": "synthetic_storage_checks_passed",
+      "integrated_multitoken_speed_measured": false,
+      "calculated_bytes_per_position_all61_layers": 4013312,
+      "calculated_payload_at_context64_bytes": 256851968,
+      "payload_is_not_process_rss": true
+    }
+  ],
+  "limitations": [
+    "One synthetic coding prompt, no finished coding solution or broad coding evaluation.",
+    "No official Kimi BF16 execution used as a numerical reference.",
+    "Historical CPU/GPU runs did not fully control file cache, thermals or external load.",
+    "Only the first five decode intervals are directly matched across CPU and GPU.",
+    "Do not multiply ratios from different experiments.",
+    "Synthetic component checks do not establish full-layer, router or token equivalence.",
+    "Logical payload, requested reads, allocator memory, RSS and physical storage traffic are distinct."
+  ]
+}

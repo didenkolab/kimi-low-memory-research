@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kimi-low-memory"
+version = "0.1.0"
+description = "Bounded-memory components for experimental Kimi and MoE inference"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.3,<3"]
+keywords = ["kimi", "moe", "mlx", "apple-silicon", "llm-inference"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+license = "MIT AND LicenseRef-Moonshot-Modified-MIT"
+license-files = ["LICENSE", "licenses/*"]
+
+[project.optional-dependencies]
+reference = ["tiktoken>=0.14,<0.15"]
+mlx = [
+  "mlx==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx-metal==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[project.scripts]
+kimi-low-memory = "kimi_low_memory.cli:main"
+
+[project.urls]
+Repository = "https://github.com/didenkolab/kimi-low-memory-research"
+Issues = "https://github.com/didenkolab/kimi-low-memory-research/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
